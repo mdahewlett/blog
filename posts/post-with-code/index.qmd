@@ -452,9 +452,17 @@ Information in machine manuals is often multimodal, containing text and images. 
 
 In this demonstration's manual, the modes are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual's content is procedures and exploded schematics, we focused on those examples
 
-::: {.column-page}
 ```{=html}
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&kernelSessionId=210373422" height="500" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+```
+```{=html}
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=32&kernelSessionId=210373422" height="500" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+```
+```{=html}
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=33&kernelSessionId=210373422" height="500" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+```
+```{=html}
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=34&kernelSessionId=210373422" height="500" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
 ```
 
 ## Performance and Limitations
