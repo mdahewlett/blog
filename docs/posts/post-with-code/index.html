@@ -6,10 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="author" content="Harlow Malloc">
+<meta name="author" content="Michael Hewlett">
 <meta name="dcterms.date" content="2025-01-15">
 
-<title>Post With Code – blog</title>
+<title>Fixing factory machines faster with LLMs – blog</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -115,9 +115,8 @@ ul.task-list li input[type="checkbox"] {
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   <div class="quarto-title-banner page-columns page-full">
     <div class="quarto-title column-body">
-      <h1 class="title">Post With Code</h1>
+      <h1 class="title">Fixing factory machines faster with LLMs</h1>
                                 <div class="quarto-categories">
-                <div class="quarto-category">news</div>
                 <div class="quarto-category">code</div>
                 <div class="quarto-category">analysis</div>
               </div>
@@ -130,7 +129,7 @@ ul.task-list li input[type="checkbox"] {
       <div>
       <div class="quarto-title-meta-heading">Author</div>
       <div class="quarto-title-meta-contents">
-               <p>Harlow Malloc </p>
+               <p>Michael Hewlett </p>
             </div>
     </div>
       
@@ -156,9 +155,72 @@ ul.task-list li input[type="checkbox"] {
 
 
 
-<p>This is a post with executable code.</p>
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+<p>When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are thousands of pages long. To help them find the right information faster, I built a QA (question-answer) tool that uses LLMs. But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their context window. Being thousands of pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question, but in November 2024 Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So I built the tool using that model and here I’ll walk through how I built it and end with how well the tool works.</p>
+</section>
+<section id="installations" class="level2">
+<h2 class="anchored" data-anchor-id="installations">Installations</h2>
+<p>First we install the necessary packages. The google-generativeai library allows us to interact with Google’s Generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The imports are for utility functions later on.</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="api-keys" class="level2">
+<h2 class="anchored" data-anchor-id="api-keys">API Keys</h2>
+<p>Next we got API keys and set them up for our conntections to google’s API.</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="converting-pdfs-to-images" class="level2">
+<h2 class="anchored" data-anchor-id="converting-pdfs-to-images">Converting PDFs to Images</h2>
+<p>Then we converted the PDF of manual into individual images since the model cannot take PDFs as input.</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="uploading-images-to-googles-ai-platform" class="level2">
+<h2 class="anchored" data-anchor-id="uploading-images-to-googles-ai-platform">Uploading Images to Google’s AI Platform</h2>
+<p>We uploaded those images using the Files API. This lets the manual to be used across different queries. It speeds things up since the files don’t need to be uploaded each time a user asks a question.</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="adding-page-numbers" class="level2">
+<h2 class="anchored" data-anchor-id="adding-page-numbers">Adding Page Numbers</h2>
+<p>Our manual did not have clear page numbers so I used a hack that would make this clear to the model.</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="caching" class="level2">
+<h2 class="anchored" data-anchor-id="caching">Caching</h2>
+<p>Next we cached the manual and invoked the model. This stores the pages that we uploaded in a place where they can be accessed faster and used more cheaply.</p>
+<p>In terms of cost, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if you are regularly giving the model the same information, it can be cheaper to cache this. Checkout the documentation around context caching here: https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python</p>
+<p>[THAT CODE]</p>
+</section>
+<section id="prompting" class="level2">
+<h2 class="anchored" data-anchor-id="prompting">Prompting</h2>
+<p>Now is the main prompt, where we tell the LLM what input it gets and what output we want. There were 5 techniques we used because we noticed that the output wasn’t what we wanted, so we added each technique to solve an issue we had with the output. First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through in 10 page sections for the whole document, then decide what pages were relevant. This is call full document chain-of-thought. Next we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to extract all the information from page into its own format, then extract the piece of information, which worked. Next the models are stochastic and can make mistakes, so we asked it to check its work. Next, since the model output would be more than what we want to show the user, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer. Last, we give the model a few examples of the output we want - this is called few-shot prompting.</p>
+<p>[CODE]</p>
+</section>
+<section id="adding-utility-functions" class="level2">
+<h2 class="anchored" data-anchor-id="adding-utility-functions">Adding utility Functions</h2>
+<p>Next are 3 utility functions. A utility function is code that supports the main function, but isn’t the special sauce. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the 2 utility functions to give the user an answer.</p>
+<p>That is how it works, next I’ll tell you what it works for then cover limitations.</p>
+<p>[CODE]</p>
+</section>
+<section id="using-the-tool" class="level2">
+<h2 class="anchored" data-anchor-id="using-the-tool">Using the Tool</h2>
+<p>Below are examples of the tool in use.</p>
+<p>What I did here is important, you actually decide what queries you want it to handle then use that to assess how well it works. Anything a technician wants to know has a location and a format. Information in the manual has a location and a format. Sometimes a technician just wants the location, or just the information, or a specific format. So we made the tool to be able to handle these types of queries. Because the manual we were working off of had a lot of information in textual procedurals, and diagrams of exploded schematics, we</p>
+<p>Query 1: Looking for location In the example below,</p>
+<p>We thought through what kinds of queries a technician would have and tested the 4 most frequent query types:</p>
+<p>The technician wants to know where information is in the manual The technician is looking for a procedure The technician is looking for a diagram The technician is looking for a detail Information in machine manuals is often multimodal, containing text and images. In some cases a technician doesn’t care what mode the information comes in (query types 1 and 4), in others they are looking for a specific mode (query types 2 and 3).</p>
+<p>In this demonstration’s manual, the modes are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual’s content is procedures and exploded schematics, we focused on those examples</p>
+<p>[CODE]</p>
+</section>
+<section id="performance-and-limitations" class="level2">
+<h2 class="anchored" data-anchor-id="performance-and-limitations">Performance and Limitations</h2>
+<p>The point of the tool is find information for technicians faster. The QA tool does well on finding the right information. The technicians I talked to say that they either have a physical manul, or use ctrl+F in a PDF to search for keywords. This tool works better than keyword search because it also lets technicians search by images or diagrams that have no associated text, that could not have been found with the normal method. On the other side, the tool takes about 1 minute to generate a response so it fails to find the information for technicians faster. One solution I am working on is RAG since there would be less information for the model to process in generating an answer, so response time should be faster. The second limitation is reliability. We have examples, but don’t know how often it is right or wrong. To address this we’ll make a bunch of example queries and correct responses in the different query types, then run the tests multiple times to score the precision and recall of the model. This will let us talk about how good the tool isand when we make changes, to what extent is has improved.</p>
+</section>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
+<p>May need to write</p>
 
 
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">

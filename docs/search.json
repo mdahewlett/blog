@@ -16,15 +16,99 @@
   {
     "objectID": "posts/post-with-code/index.html",
     "href": "posts/post-with-code/index.html",
-    "title": "Post With Code",
+    "title": "Fixing factory machines faster with LLMs",
     "section": "",
-    "text": "This is a post with executable code."
+    "text": "When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are thousands of pages long. To help them find the right information faster, I built a QA (question-answer) tool that uses LLMs. But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their context window. Being thousands of pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question, but in November 2024 Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So I built the tool using that model and here I’ll walk through how I built it and end with how well the tool works."
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#introduction",
+    "href": "posts/post-with-code/index.html#introduction",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "",
+    "text": "When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are thousands of pages long. To help them find the right information faster, I built a QA (question-answer) tool that uses LLMs. But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their context window. Being thousands of pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question, but in November 2024 Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So I built the tool using that model and here I’ll walk through how I built it and end with how well the tool works."
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#installations",
+    "href": "posts/post-with-code/index.html#installations",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Installations",
+    "text": "Installations\nFirst we install the necessary packages. The google-generativeai library allows us to interact with Google’s Generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The imports are for utility functions later on.\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#api-keys",
+    "href": "posts/post-with-code/index.html#api-keys",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "API Keys",
+    "text": "API Keys\nNext we got API keys and set them up for our conntections to google’s API.\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#converting-pdfs-to-images",
+    "href": "posts/post-with-code/index.html#converting-pdfs-to-images",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Converting PDFs to Images",
+    "text": "Converting PDFs to Images\nThen we converted the PDF of manual into individual images since the model cannot take PDFs as input.\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#uploading-images-to-googles-ai-platform",
+    "href": "posts/post-with-code/index.html#uploading-images-to-googles-ai-platform",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Uploading Images to Google’s AI Platform",
+    "text": "Uploading Images to Google’s AI Platform\nWe uploaded those images using the Files API. This lets the manual to be used across different queries. It speeds things up since the files don’t need to be uploaded each time a user asks a question.\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#adding-page-numbers",
+    "href": "posts/post-with-code/index.html#adding-page-numbers",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Adding Page Numbers",
+    "text": "Adding Page Numbers\nOur manual did not have clear page numbers so I used a hack that would make this clear to the model.\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#caching",
+    "href": "posts/post-with-code/index.html#caching",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Caching",
+    "text": "Caching\nNext we cached the manual and invoked the model. This stores the pages that we uploaded in a place where they can be accessed faster and used more cheaply.\nIn terms of cost, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if you are regularly giving the model the same information, it can be cheaper to cache this. Checkout the documentation around context caching here: https://ai.google.dev/gemini-api/docs/caching?hl=en&lang=python\n[THAT CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#prompting",
+    "href": "posts/post-with-code/index.html#prompting",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Prompting",
+    "text": "Prompting\nNow is the main prompt, where we tell the LLM what input it gets and what output we want. There were 5 techniques we used because we noticed that the output wasn’t what we wanted, so we added each technique to solve an issue we had with the output. First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through in 10 page sections for the whole document, then decide what pages were relevant. This is call full document chain-of-thought. Next we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to extract all the information from page into its own format, then extract the piece of information, which worked. Next the models are stochastic and can make mistakes, so we asked it to check its work. Next, since the model output would be more than what we want to show the user, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer. Last, we give the model a few examples of the output we want - this is called few-shot prompting.\n[CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#adding-utility-functions",
+    "href": "posts/post-with-code/index.html#adding-utility-functions",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Adding utility Functions",
+    "text": "Adding utility Functions\nNext are 3 utility functions. A utility function is code that supports the main function, but isn’t the special sauce. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the 2 utility functions to give the user an answer.\nThat is how it works, next I’ll tell you what it works for then cover limitations.\n[CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#using-the-tool",
+    "href": "posts/post-with-code/index.html#using-the-tool",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Using the Tool",
+    "text": "Using the Tool\nBelow are examples of the tool in use.\nWhat I did here is important, you actually decide what queries you want it to handle then use that to assess how well it works. Anything a technician wants to know has a location and a format. Information in the manual has a location and a format. Sometimes a technician just wants the location, or just the information, or a specific format. So we made the tool to be able to handle these types of queries. Because the manual we were working off of had a lot of information in textual procedurals, and diagrams of exploded schematics, we\nQuery 1: Looking for location In the example below,\nWe thought through what kinds of queries a technician would have and tested the 4 most frequent query types:\nThe technician wants to know where information is in the manual The technician is looking for a procedure The technician is looking for a diagram The technician is looking for a detail Information in machine manuals is often multimodal, containing text and images. In some cases a technician doesn’t care what mode the information comes in (query types 1 and 4), in others they are looking for a specific mode (query types 2 and 3).\nIn this demonstration’s manual, the modes are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual’s content is procedures and exploded schematics, we focused on those examples\n[CODE]"
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#performance-and-limitations",
+    "href": "posts/post-with-code/index.html#performance-and-limitations",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Performance and Limitations",
+    "text": "Performance and Limitations\nThe point of the tool is find information for technicians faster. The QA tool does well on finding the right information. The technicians I talked to say that they either have a physical manul, or use ctrl+F in a PDF to search for keywords. This tool works better than keyword search because it also lets technicians search by images or diagrams that have no associated text, that could not have been found with the normal method. On the other side, the tool takes about 1 minute to generate a response so it fails to find the information for technicians faster. One solution I am working on is RAG since there would be less information for the model to process in generating an answer, so response time should be faster. The second limitation is reliability. We have examples, but don’t know how often it is right or wrong. To address this we’ll make a bunch of example queries and correct responses in the different query types, then run the tests multiple times to score the precision and recall of the model. This will let us talk about how good the tool isand when we make changes, to what extent is has improved."
+  },
+  {
+    "objectID": "posts/post-with-code/index.html#conclusion",
+    "href": "posts/post-with-code/index.html#conclusion",
+    "title": "Fixing factory machines faster with LLMs",
+    "section": "Conclusion",
+    "text": "Conclusion\nMay need to write"
   },
   {
     "objectID": "index.html",
     "href": "index.html",
     "title": "blog",
     "section": "",
-    "text": "Post With Code\n\n\n\n\n\n\nnews\n\n\ncode\n\n\nanalysis\n\n\n\n\n\n\n\n\n\nJan 15, 2025\n\n\nHarlow Malloc\n\n\n\n\n\n\n\n\n\n\n\n\nWelcome To My Blog\n\n\n\n\n\n\nnews\n\n\n\n\n\n\n\n\n\nJan 12, 2025\n\n\nTristan O’Malley\n\n\n\n\n\n\nNo matching items"
+    "text": "Fixing factory machines faster with LLMs\n\n\n\n\n\n\ncode\n\n\nanalysis\n\n\n\n\n\n\n\n\n\nJan 15, 2025\n\n\nMichael Hewlett\n\n\n\n\n\n\n\n\n\n\n\n\nWelcome To My Blog\n\n\n\n\n\n\nnews\n\n\n\n\n\n\n\n\n\nJan 12, 2025\n\n\nTristan O’Malley\n\n\n\n\n\n\nNo matching items"
   }
 ]
