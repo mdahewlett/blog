@@ -183,7 +183,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <!-- margin-sidebar -->
     
 <!-- main -->
-<main class="content quarto-banner-title-block page-columns page-full" id="quarto-document-content">
+<main class="content quarto-banner-title-block" id="quarto-document-content">
 
 
 
@@ -191,12 +191,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<p>When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are thousands of pages long. To help them find the right information faster, I built a QA (question-answer) tool that uses LLMs. But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their context window. Being thousands of pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question, but in November 2024 Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So I built the tool using that model and here I’ll walk through how I built it and end with how well the tool works.</p>
+<p>When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are <u>thousands</u> of pages long! To help them find the right information faster, my friend and I built a QA (question-answer) tool that uses LLMs.</p>
+<p>But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their <em>context window</em>. Being many, many pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question (this is called <em>retrieval augment generation</em> or <em>RAG</em>), but in October 2024, Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So my friend and I built the tool using that model. In the rest of this post I’ll walk through how we worked with Google’s APIs to build the tool, show how it performs on a few queries, and end with limitations and next steps for the project.</p>
 </section>
 <section id="installations" class="level2">
 <h2 class="anchored" data-anchor-id="installations">Installations</h2>
-<p>First we install the necessary packages. The google-generativeai library allows us to interact with Google’s Generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The imports are for utility functions later on.</p>
-<div id="08b01eae" class="cell" data-execution_count="1">
+<p>First we installed the necessary packages. The google-generativeai library allows us to interact with Google’s generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The other imports are for utility functions later on.</p>
+<div id="7d2b5798" class="cell" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Installations</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>pip install <span class="op">-</span>q google<span class="op">-</span>generativeai</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>apt<span class="op">-</span>get install <span class="op">-</span>y poppler<span class="op">-</span>utils</span>
@@ -219,8 +220,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="api-keys" class="level2">
 <h2 class="anchored" data-anchor-id="api-keys">API Keys</h2>
-<p>Next we got API keys and set them up for our conntections to google’s API.</p>
-<div id="4406ec7d" class="cell" data-execution_count="2">
+<p>Next we got API keys from Google and set them up. To get a Gemini API key, check out the documentation here: <a href="https://ai.google.dev/gemini-api/docs" class="uri">https://ai.google.dev/gemini-api/docs</a>.</p>
+<div id="a3914fb2" class="cell" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure API keys</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>user_secrets <span class="op">=</span> UserSecretsClient()</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>api_key <span class="op">=</span> user_secrets.get_secret(<span class="st">"GOOGLE_API_KEY"</span>)</span>
@@ -229,17 +230,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="converting-pdfs-to-images" class="level2">
 <h2 class="anchored" data-anchor-id="converting-pdfs-to-images">Converting PDFs to Images</h2>
-<p>Then we converted the PDF of manual into individual images since the model cannot take PDFs as input.</p>
-<div id="5003d478" class="cell" data-execution_count="3">
+<p>Then we converted the PDF of the manual into individual images since the model cannot take PDFs as input.</p>
+<div id="cfef3120" class="cell" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert PDF to images</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>pdf_path <span class="op">=</span> <span class="st">'/kaggle/input/manuals/manual_130.pdf'</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>pages <span class="op">=</span> convert_from_path(pdf_path)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
-<section id="uploading-images-to-googles-ai-platform" class="level2">
-<h2 class="anchored" data-anchor-id="uploading-images-to-googles-ai-platform">Uploading Images to Google’s AI Platform</h2>
-<p>We uploaded those images using the Files API. This lets the manual to be used across different queries. It speeds things up since the files don’t need to be uploaded each time a user asks a question.</p>
-<div id="1349bb42" class="cell" data-execution_count="4">
+<section id="uploading-images" class="level2">
+<h2 class="anchored" data-anchor-id="uploading-images">Uploading Images</h2>
+<p>We uploaded those images to Google’s AI platform using the Files API. Uploading is a necessary step for caching, which I’ll cover in a sec.</p>
+<div id="5b9c2236" class="cell" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Upload pages, save file names</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>uploaded_file_names <span class="op">=</span> []</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -255,8 +256,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="adding-page-numbers" class="level2">
 <h2 class="anchored" data-anchor-id="adding-page-numbers">Adding Page Numbers</h2>
-<p>Our manual did not have clear page numbers so I used a hack that would make this clear to the model.</p>
-<div id="89ad418b" class="cell" data-execution_count="5">
+<p>Our manual did not have clear page numbers so we used a hack that tells the model what page numbers to associate with what pages.</p>
+<div id="419f9669" class="cell" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Add context to pages</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>context_preamble <span class="op">=</span> <span class="st">"""</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="st">Please answer questions with respect to the "ACTUAL_PAGE_NUMBER" indices, rather than the page numbers in the manual itself.</span></span>
@@ -273,9 +274,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="caching" class="level2">
 <h2 class="anchored" data-anchor-id="caching">Caching</h2>
-<p>Next we cached the manual and invoked the model. This stores the pages that we uploaded in a place where they can be accessed faster and used more cheaply.</p>
-<p>In terms of cost, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if you are regularly giving the model the same information, it can be cheaper to cache this. Checkout the documentation around context caching here: https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python</p>
-<div id="07f9010e" class="cell" data-execution_count="6">
+<p>Next we cached the manual and initialized the model. Caching makes a copy of the uploaded images more readily available to the model so that answers are generated faster.</p>
+<p>Caching also brings down the cost. Generally with API calls to LLMs, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if a big part of the information you are regularly giving the model is the same, it can be cheaper to cache this.</p>
+<p>In our case, each time a user asks a question, we’re giving the model that question AND the pages of the manual. Since the user’s question changes every time, we can’t cache it, but the manual pages don’t change, so caching makes sense there.</p>
+<p>For more on context caching, checkout the documentation here: <a href="https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python" class="uri">https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python</a></p>
+<div id="43a9a4c2" class="cell" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache context, add system prompt</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>cache <span class="op">=</span> caching.CachedContent.create(</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">'models/gemini-1.5-pro-002'</span>,</span>
@@ -295,8 +298,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="prompting" class="level2">
 <h2 class="anchored" data-anchor-id="prompting">Prompting</h2>
-<p>Now is the main prompt, where we tell the LLM what input it gets and what output we want. There were 5 techniques we used because we noticed that the output wasn’t what we wanted, so we added each technique to solve an issue we had with the output. First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through in 10 page sections for the whole document, then decide what pages were relevant. This is call full document chain-of-thought. Next we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to extract all the information from page into its own format, then extract the piece of information, which worked. Next the models are stochastic and can make mistakes, so we asked it to check its work. Next, since the model output would be more than what we want to show the user, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer. Last, we give the model a few examples of the output we want - this is called few-shot prompting.</p>
-<div id="e00b0b2c" class="cell" data-execution_count="7">
+<p>Then we wrote a prompt that would pass the user’s question to the model, along with instructions on how to process all the input and what output we would want the model to generate.</p>
+<p>We built this prompt by first asking the model example questions (e.g.&nbsp;“Where can I find information on rear brake lights?”), then used those moments when then model’s response was incorrect to modify the instructions in our prompt in order to get closer to the desired output. This process is called <em>prompt engineering</em>.</p>
+<p>In this process we found 5 problems and used 5 common prompting techniques to address those.</p>
+<p>First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through the whole document in 10 page sections, then decide what pages were relevant. This is called <em>full document chain-of-thought</em>.</p>
+<p>Second we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to first extract all the information from page into its own format, then use its copy of the information to answer the question.</p>
+<p>Third, these models are stochastic and can make mistakes, so we asked it to check its work.</p>
+<p>Fourth, since the model output would include its full document chain of thought and other irrelevant information, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer.</p>
+<p>Fifth, we gave the model a few examples of the output we wanted. This technique is called <em>few-shot prompting</em>. The code below starts with those examples because they are then read into the main prompt. You can see from the length of the example outputs why we would want to just extract the key information for the user.</p>
+<p>Example Output for Few Shot Prompting #1</p>
+<div id="398ef3f2" class="cell" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>example_1 <span class="op">=</span> <span class="st">"""</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;example-1&gt;</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="st">Query: What is the CO content at idle?</span></span>
@@ -367,270 +378,290 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb7-68"><a href="#cb7-68" aria-hidden="true" tabindex="-1"></a><span class="st">44</span></span>
 <span id="cb7-69"><a href="#cb7-69" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/page-references&gt;</span></span>
 <span id="cb7-70"><a href="#cb7-70" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/example-1&gt;</span></span>
-<span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span>
-<span id="cb7-72"><a href="#cb7-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-73"><a href="#cb7-73" aria-hidden="true" tabindex="-1"></a>example_2 <span class="op">=</span> <span class="st">"""</span></span>
-<span id="cb7-74"><a href="#cb7-74" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;example-2&gt;</span></span>
-<span id="cb7-75"><a href="#cb7-75" aria-hidden="true" tabindex="-1"></a><span class="st">Query: Where can I find information on the Sunroof?</span></span>
-<span id="cb7-76"><a href="#cb7-76" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-77"><a href="#cb7-77" aria-hidden="true" tabindex="-1"></a><span class="st">1. Page Scan</span></span>
-<span id="cb7-78"><a href="#cb7-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-79"><a href="#cb7-79" aria-hidden="true" tabindex="-1"></a><span class="st">It looks like there are 136 pages in total, so I'll sweep through them by 10s.</span></span>
-<span id="cb7-80"><a href="#cb7-80" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-81"><a href="#cb7-81" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 1-10: These pages are the cover, title page, copyright, table of contents, and foreword. No sunroof information.</span></span>
-<span id="cb7-82"><a href="#cb7-82" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-83"><a href="#cb7-83" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 11-20: The index on pages 9-18 and continuation on 20 doesn't list "sunroof" explicitly, but I'll keep an eye out for related terms like "roof" or "top."</span></span>
-<span id="cb7-84"><a href="#cb7-84" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-85"><a href="#cb7-85" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 21-30: These pages cover general information, engine identification and some specifications. No mention of the sunroof.</span></span>
-<span id="cb7-86"><a href="#cb7-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-87"><a href="#cb7-87" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 31-40: These pages continue with engine removal and installation procedures. No sunroof information here.</span></span>
-<span id="cb7-88"><a href="#cb7-88" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-89"><a href="#cb7-89" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 41-50: These pages continue covering engine-related procedures. No sunroof information.</span></span>
-<span id="cb7-90"><a href="#cb7-90" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-91"><a href="#cb7-91" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 51-60: These pages deal with air-cooled engine components. No sunroof information.</span></span>
-<span id="cb7-92"><a href="#cb7-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-93"><a href="#cb7-93" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 61-70: Still working through the air-cooled engine section and the diesel engine section. Nothing on the sunroof.</span></span>
-<span id="cb7-94"><a href="#cb7-94" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-95"><a href="#cb7-95" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 71-80: More on engine crankshaft and crankcase, now including water-cooled engines. Still no sunroof.</span></span>
-<span id="cb7-96"><a href="#cb7-96" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-97"><a href="#cb7-97" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 81-90: Still engine-related content, but nothing about the sunroof.</span></span>
-<span id="cb7-98"><a href="#cb7-98" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-99"><a href="#cb7-99" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 91-100: These pages continue on crankshaft/crankcase information. Nothing related to the sunroof is present.</span></span>
-<span id="cb7-100"><a href="#cb7-100" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-101"><a href="#cb7-101" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 101-110: These pages cover crankshaft/crankcase information, including replacing procedures. No sunroof details.</span></span>
-<span id="cb7-102"><a href="#cb7-102" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-103"><a href="#cb7-103" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 111-120: Cylinder head and valve drive information is covered in these pages.  Still no mention of the sunroof.</span></span>
-<span id="cb7-104"><a href="#cb7-104" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-105"><a href="#cb7-105" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 121-130: More information on cylinder heads and pushrod tubes. No sunroof information.</span></span>
-<span id="cb7-106"><a href="#cb7-106" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-107"><a href="#cb7-107" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 131-140: Final pages related to cylinder heads.  No sunroof information is present.</span></span>
-<span id="cb7-108"><a href="#cb7-108" aria-hidden="true" tabindex="-1"></a><span class="st">----</span></span>
-<span id="cb7-109"><a href="#cb7-109" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-110"><a href="#cb7-110" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 4-5 Table of Contents: It contains information on the body which contains an entry for Sunroof. This entry on Sunroof covers pages 62 to 63.</span></span>
-<span id="cb7-111"><a href="#cb7-111" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-112"><a href="#cb7-112" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 62-63: No information on the sunroof.</span></span>
-<span id="cb7-113"><a href="#cb7-113" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-114"><a href="#cb7-114" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 55-64: I'll examine this range more closely since the table of contents can be inaccurate due to the non-sequential page numbering. Pages 58 and 59 have information on the sunroof, labelled as "Sunroof."</span></span>
-<span id="cb7-115"><a href="#cb7-115" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-116"><a href="#cb7-116" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-117"><a href="#cb7-117" aria-hidden="true" tabindex="-1"></a><span class="st">2. Extraction </span></span>
-<span id="cb7-118"><a href="#cb7-118" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-119"><a href="#cb7-119" aria-hidden="true" tabindex="-1"></a><span class="st">Page 4 shows "Body" has a sub-section for "Sunroof" listed as pages 62-63.</span></span>
-<span id="cb7-120"><a href="#cb7-120" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-121"><a href="#cb7-121" aria-hidden="true" tabindex="-1"></a><span class="st">Page 58 and 59: Show the title of Sunroof.</span></span>
-<span id="cb7-122"><a href="#cb7-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-123"><a href="#cb7-123" aria-hidden="true" tabindex="-1"></a><span class="st">3. Error Correction</span></span>
-<span id="cb7-124"><a href="#cb7-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-125"><a href="#cb7-125" aria-hidden="true" tabindex="-1"></a><span class="st">Page 4 is the index of the manual, so it in and of itself is not relevant. Also, the index shows that the relavant pages are 62-63, but after rechecking pages 50-60, I found information on the sunroof on pages 58 and 59, titled "Sunroof."</span></span>
-<span id="cb7-126"><a href="#cb7-126" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-127"><a href="#cb7-127" aria-hidden="true" tabindex="-1"></a><span class="st">4. Final Answer</span></span>
-<span id="cb7-128"><a href="#cb7-128" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-129"><a href="#cb7-129" aria-hidden="true" tabindex="-1"></a><span class="st">4. Final Answer</span></span>
-<span id="cb7-130"><a href="#cb7-130" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;final-answer&gt;</span></span>
-<span id="cb7-131"><a href="#cb7-131" aria-hidden="true" tabindex="-1"></a><span class="st">Information on the sunroof can be found on pages 58 and 59 of the manual.</span></span>
-<span id="cb7-132"><a href="#cb7-132" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/final-answer&gt;</span></span>
-<span id="cb7-133"><a href="#cb7-133" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;page-references&gt;</span></span>
-<span id="cb7-134"><a href="#cb7-134" aria-hidden="true" tabindex="-1"></a><span class="st">58, 59</span></span>
-<span id="cb7-135"><a href="#cb7-135" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/page-references&gt;</span></span>
-<span id="cb7-136"><a href="#cb7-136" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span>
-<span id="cb7-137"><a href="#cb7-137" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-138"><a href="#cb7-138" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_prompt(query):</span>
-<span id="cb7-139"><a href="#cb7-139" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"""Based on the manual pages provided, answer the following question: </span><span class="sc">{</span>query<span class="sc">}</span></span>
-<span id="cb7-140"><a href="#cb7-140" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-141"><a href="#cb7-141" aria-hidden="true" tabindex="-1"></a><span class="ss">Please provide your response in four parts:</span></span>
-<span id="cb7-142"><a href="#cb7-142" aria-hidden="true" tabindex="-1"></a><span class="ss">1. Page Scan: Explain your reasoning process, including which pages you looked at and why. Please exhaustively check every page in the input, and talk about your thoughts about each set of 10 pages. Like, I will first look at 1-10. I see nothing related to my query here. I now processed 11-20, and so on for all of the input. There are </span><span class="sc">{</span><span class="bu">len</span>(pages)<span class="sc">}</span><span class="ss"> pages in total, don't forget the ones on the end!</span></span>
-<span id="cb7-143"><a href="#cb7-143" aria-hidden="true" tabindex="-1"></a><span class="ss">2. Extraction: For the given pages, extract the page contents. If the answer is in a table or diagram, extract the entire table / diagram, so that you can clearly see the data you want to extract.</span></span>
-<span id="cb7-144"><a href="#cb7-144" aria-hidden="true" tabindex="-1"></a><span class="ss">3. Error Correction: If you made a mistake, or need to look at a different page, use this space to look at that page and extract data as needed. If no errors are detected, write "No errors detected", and list the final list of pages that you plan on returning. </span></span>
-<span id="cb7-145"><a href="#cb7-145" aria-hidden="true" tabindex="-1"></a><span class="ss">4. Final Answer: Give the precise answer to the question, as well as the pages referenced (it is possible that the answer is simply pages).</span></span>
-<span id="cb7-146"><a href="#cb7-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-147"><a href="#cb7-147" aria-hidden="true" tabindex="-1"></a><span class="ss">Format your response as follows:</span></span>
-<span id="cb7-148"><a href="#cb7-148" aria-hidden="true" tabindex="-1"></a><span class="ss">1. Page Scan:</span></span>
-<span id="cb7-149"><a href="#cb7-149" aria-hidden="true" tabindex="-1"></a><span class="ss">[your comprehensive page scan here]</span></span>
-<span id="cb7-150"><a href="#cb7-150" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-151"><a href="#cb7-151" aria-hidden="true" tabindex="-1"></a><span class="ss">2. Extraction:</span></span>
-<span id="cb7-152"><a href="#cb7-152" aria-hidden="true" tabindex="-1"></a><span class="ss">[your detailed extraction here]</span></span>
-<span id="cb7-153"><a href="#cb7-153" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-154"><a href="#cb7-154" aria-hidden="true" tabindex="-1"></a><span class="ss">3. Error Correction:</span></span>
-<span id="cb7-155"><a href="#cb7-155" aria-hidden="true" tabindex="-1"></a><span class="ss">[your detailed error correction here]</span></span>
-<span id="cb7-156"><a href="#cb7-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-157"><a href="#cb7-157" aria-hidden="true" tabindex="-1"></a><span class="ss">4. Final Answer</span></span>
-<span id="cb7-158"><a href="#cb7-158" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;final-answer&gt;</span></span>
-<span id="cb7-159"><a href="#cb7-159" aria-hidden="true" tabindex="-1"></a><span class="ss">[your precise prose answer here]</span></span>
-<span id="cb7-160"><a href="#cb7-160" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/final-answer&gt;</span></span>
-<span id="cb7-161"><a href="#cb7-161" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;page-references&gt;</span></span>
-<span id="cb7-162"><a href="#cb7-162" aria-hidden="true" tabindex="-1"></a><span class="ss">[page numbers here, delimited by commas]</span></span>
-<span id="cb7-163"><a href="#cb7-163" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/page-references&gt;</span></span>
-<span id="cb7-164"><a href="#cb7-164" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-165"><a href="#cb7-165" aria-hidden="true" tabindex="-1"></a><span class="ss">Here are two example outputs for your reference, please format your response accordingly:</span></span>
-<span id="cb7-166"><a href="#cb7-166" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;begin-examples&gt;</span></span>
-<span id="cb7-167"><a href="#cb7-167" aria-hidden="true" tabindex="-1"></a><span class="sc">{</span>example_1<span class="sc">}</span></span>
-<span id="cb7-168"><a href="#cb7-168" aria-hidden="true" tabindex="-1"></a><span class="sc">{</span>example_2<span class="sc">}</span></span>
-<span id="cb7-169"><a href="#cb7-169" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/end-examples&gt;</span></span>
-<span id="cb7-170"><a href="#cb7-170" aria-hidden="true" tabindex="-1"></a><span class="ss">    """</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Example Output for Few Shot Prompting #2</p>
+<div id="d049ee8e" class="cell" data-execution_count="8">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>example_2 <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;example-2&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="st">Query: Where can I find information on the Sunroof?</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="st">1. Page Scan</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="st">It looks like there are 136 pages in total, so I'll sweep through them by 10s.</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 1-10: These pages are the cover, title page, copyright, table of contents, and foreword. No sunroof information.</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 11-20: The index on pages 9-18 and continuation on 20 doesn't list "sunroof" explicitly, but I'll keep an eye out for related terms like "roof" or "top."</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 21-30: These pages cover general information, engine identification and some specifications. No mention of the sunroof.</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 31-40: These pages continue with engine removal and installation procedures. No sunroof information here.</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 41-50: These pages continue covering engine-related procedures. No sunroof information.</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 51-60: These pages deal with air-cooled engine components. No sunroof information.</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 61-70: Still working through the air-cooled engine section and the diesel engine section. Nothing on the sunroof.</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 71-80: More on engine crankshaft and crankcase, now including water-cooled engines. Still no sunroof.</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 81-90: Still engine-related content, but nothing about the sunroof.</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 91-100: These pages continue on crankshaft/crankcase information. Nothing related to the sunroof is present.</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 101-110: These pages cover crankshaft/crankcase information, including replacing procedures. No sunroof details.</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 111-120: Cylinder head and valve drive information is covered in these pages.  Still no mention of the sunroof.</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 121-130: More information on cylinder heads and pushrod tubes. No sunroof information.</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 131-140: Final pages related to cylinder heads.  No sunroof information is present.</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a><span class="st">----</span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 4-5 Table of Contents: It contains information on the body which contains an entry for Sunroof. This entry on Sunroof covers pages 62 to 63.</span></span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 62-63: No information on the sunroof.</span></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a><span class="st">Pages 55-64: I'll examine this range more closely since the table of contents can be inaccurate due to the non-sequential page numbering. Pages 58 and 59 have information on the sunroof, labelled as "Sunroof."</span></span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a><span class="st">2. Extraction </span></span>
+<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a><span class="st">Page 4 shows "Body" has a sub-section for "Sunroof" listed as pages 62-63.</span></span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a><span class="st">Page 58 and 59: Show the title of Sunroof.</span></span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a><span class="st">3. Error Correction</span></span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a><span class="st">Page 4 is the index of the manual, so it in and of itself is not relevant. Also, the index shows that the relavant pages are 62-63, but after rechecking pages 50-60, I found information on the sunroof on pages 58 and 59, titled "Sunroof."</span></span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a><span class="st">4. Final Answer</span></span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a><span class="st">4. Final Answer</span></span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;final-answer&gt;</span></span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a><span class="st">Information on the sunroof can be found on pages 58 and 59 of the manual.</span></span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/final-answer&gt;</span></span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;page-references&gt;</span></span>
+<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a><span class="st">58, 59</span></span>
+<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;/page-references&gt;</span></span>
+<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Main Prompt</p>
+<div id="bda3b31a" class="cell" data-execution_count="9">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_prompt(query):</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"""Based on the manual pages provided, answer the following question: </span><span class="sc">{</span>query<span class="sc">}</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ss">Please provide your response in four parts:</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ss">1. Page Scan: Explain your reasoning process, including which pages you looked at and why. Please exhaustively check every page in the input, and talk about your thoughts about each set of 10 pages. Like, I will first look at 1-10. I see nothing related to my query here. I now processed 11-20, and so on for all of the input. There are </span><span class="sc">{</span><span class="bu">len</span>(pages)<span class="sc">}</span><span class="ss"> pages in total, don't forget the ones on the end!</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ss">2. Extraction: For the given pages, extract the page contents. If the answer is in a table or diagram, extract the entire table / diagram, so that you can clearly see the data you want to extract.</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ss">3. Error Correction: If you made a mistake, or need to look at a different page, use this space to look at that page and extract data as needed. If no errors are detected, write "No errors detected", and list the final list of pages that you plan on returning. </span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ss">4. Final Answer: Give the precise answer to the question, as well as the pages referenced (it is possible that the answer is simply pages).</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="ss">Format your response as follows:</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="ss">1. Page Scan:</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="ss">[your comprehensive page scan here]</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="ss">2. Extraction:</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="ss">[your detailed extraction here]</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="ss">3. Error Correction:</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="ss">[your detailed error correction here]</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="ss">4. Final Answer</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;final-answer&gt;</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="ss">[your precise prose answer here]</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/final-answer&gt;</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;page-references&gt;</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a><span class="ss">[page numbers here, delimited by commas]</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/page-references&gt;</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="ss">Here are two example outputs for your reference, please format your response accordingly:</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;begin-examples&gt;</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="sc">{</span>example_1<span class="sc">}</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a><span class="sc">{</span>example_2<span class="sc">}</span></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a><span class="ss">&lt;/end-examples&gt;</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a><span class="ss">    """</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="adding-utility-functions" class="level2">
-<h2 class="anchored" data-anchor-id="adding-utility-functions">Adding utility Functions</h2>
-<p>Next are 3 utility functions. A utility function is code that supports the main function, but isn’t the special sauce. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the 2 utility functions to give the user an answer.</p>
-<p>That is how it works, next I’ll tell you what it works for then cover limitations.</p>
-<div id="882516f5" class="cell" data-execution_count="8">
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_answer_and_references(text):</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Extract the final answer and page references from the formatted text.</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co">        text (str): Input text containing final answer and page references in XML-like format</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="co">        tuple: (final_answer, page_references)</span></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co">            - final_answer (str): The extracted answer text</span></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="co">            - page_references (list): List of page numbers as integers</span></span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co">    Example:</span></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co">        &gt;&gt;&gt; text = '''&lt;final-answer&gt;The idle CO content is 0.7 ± 0.4 Vol. %.&lt;/final-answer&gt;</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="co">        ... &lt;page-references&gt;44, 53&lt;/page-references&gt;'''</span></span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a><span class="co">        &gt;&gt;&gt; extract_answer_and_references(text)</span></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co">        ('The idle CO content is 0.7 ± 0.4 Vol. %.', [44, 53])</span></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract final answer</span></span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>    answer_match <span class="op">=</span> re.search(<span class="vs">r"&lt;final-answer&gt;(.*?)&lt;/final-answer&gt;"</span>, text, re.DOTALL)</span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    final_answer <span class="op">=</span> answer_match.group(<span class="dv">1</span>).strip() <span class="cf">if</span> answer_match <span class="cf">else</span> <span class="va">None</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract page references</span></span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    ref_match <span class="op">=</span> re.search(<span class="vs">r"&lt;page-references&gt;(.*?)&lt;/page-references&gt;"</span>, text, re.DOTALL)</span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>    page_references <span class="op">=</span> []</span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ref_match:</span>
-<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Split by comma and convert to integers, handling whitespace</span></span>
-<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>        refs <span class="op">=</span> ref_match.group(<span class="dv">1</span>).strip()</span>
-<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>        page_references <span class="op">=</span> [</span>
-<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>            <span class="bu">int</span>(page.strip()) <span class="cf">for</span> page <span class="kw">in</span> refs.split(<span class="st">","</span>) <span class="cf">if</span> page.strip().isdigit()</span>
-<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>        ]</span>
-<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> final_answer <span class="kw">is</span> <span class="va">None</span>:</span>
-<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"No final answer found in the input text"</span>)</span>
-<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> final_answer, page_references</span>
-<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> display_selected_pages(pages, indexes, columns<span class="op">=</span><span class="dv">2</span>):</span>
-<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a><span class="co">    Displays specific pages based on their indexes, arranged in a grid with a configurable number of columns.</span></span>
-<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a><span class="co">    Safely handles invalid indices by skipping them.</span></span>
-<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
-<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a><span class="co">        pages (list): List of PIL.Image objects representing the pages of a PDF.</span></span>
-<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a><span class="co">        indexes (list): List of indices (can be any type) representing the pages to display.</span></span>
-<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a><span class="co">        columns (int): Number of columns per row (default is 2).</span></span>
-<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Validate columns</span></span>
-<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> columns <span class="op">&lt;</span> <span class="dv">1</span>:</span>
-<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"The number of columns must be at least 1."</span>)</span>
-<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Convert and filter valid indexes</span></span>
-<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a>    valid_indexes <span class="op">=</span> []</span>
-<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a>    skipped_indexes <span class="op">=</span> []</span>
-<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> idx <span class="kw">in</span> indexes:</span>
-<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
-<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Try to convert to integer</span></span>
-<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a>            int_idx <span class="op">=</span> <span class="bu">int</span>(idx)</span>
-<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Check if index is in valid range</span></span>
-<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">0</span> <span class="op">&lt;=</span> int_idx <span class="op">&lt;</span> <span class="bu">len</span>(pages):</span>
-<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a>                valid_indexes.append(int_idx)</span>
-<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a>            <span class="cf">else</span>:</span>
-<span id="cb8-65"><a href="#cb8-65" aria-hidden="true" tabindex="-1"></a>                skipped_indexes.append(idx)</span>
-<span id="cb8-66"><a href="#cb8-66" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> (<span class="pp">ValueError</span>, <span class="pp">TypeError</span>):</span>
-<span id="cb8-67"><a href="#cb8-67" aria-hidden="true" tabindex="-1"></a>            <span class="co"># If conversion fails, add to skipped list</span></span>
-<span id="cb8-68"><a href="#cb8-68" aria-hidden="true" tabindex="-1"></a>            skipped_indexes.append(idx)</span>
-<span id="cb8-69"><a href="#cb8-69" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-70"><a href="#cb8-70" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> skipped_indexes:</span>
-<span id="cb8-71"><a href="#cb8-71" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Skipped invalid indexes: </span><span class="sc">{</span>skipped_indexes<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb8-72"><a href="#cb8-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-73"><a href="#cb8-73" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> valid_indexes:</span>
-<span id="cb8-74"><a href="#cb8-74" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="st">"No valid indexes provided. Nothing to display."</span>)</span>
-<span id="cb8-75"><a href="#cb8-75" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
-<span id="cb8-76"><a href="#cb8-76" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-77"><a href="#cb8-77" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calculate rows needed</span></span>
-<span id="cb8-78"><a href="#cb8-78" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> math.ceil(<span class="bu">len</span>(valid_indexes) <span class="op">/</span> columns)</span>
-<span id="cb8-79"><a href="#cb8-79" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-80"><a href="#cb8-80" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a grid to display pages</span></span>
-<span id="cb8-81"><a href="#cb8-81" aria-hidden="true" tabindex="-1"></a>    fig, axes <span class="op">=</span> plt.subplots(rows, columns, figsize<span class="op">=</span>(columns <span class="op">*</span> <span class="dv">5</span>, rows <span class="op">*</span> <span class="dv">7</span>))</span>
-<span id="cb8-82"><a href="#cb8-82" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Convert axes to 2D array if it's 1D or a single axis</span></span>
-<span id="cb8-83"><a href="#cb8-83" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> rows <span class="op">==</span> <span class="dv">1</span> <span class="kw">and</span> columns <span class="op">==</span> <span class="dv">1</span>:</span>
-<span id="cb8-84"><a href="#cb8-84" aria-hidden="true" tabindex="-1"></a>        axes <span class="op">=</span> np.array([[axes]])</span>
-<span id="cb8-85"><a href="#cb8-85" aria-hidden="true" tabindex="-1"></a>    <span class="cf">elif</span> rows <span class="op">==</span> <span class="dv">1</span> <span class="kw">or</span> columns <span class="op">==</span> <span class="dv">1</span>:</span>
-<span id="cb8-86"><a href="#cb8-86" aria-hidden="true" tabindex="-1"></a>        axes <span class="op">=</span> axes.reshape(<span class="op">-</span><span class="dv">1</span>, columns)</span>
-<span id="cb8-87"><a href="#cb8-87" aria-hidden="true" tabindex="-1"></a>    axes <span class="op">=</span> axes.flatten()  <span class="co"># Flatten for easier indexing</span></span>
-<span id="cb8-88"><a href="#cb8-88" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-89"><a href="#cb8-89" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Iterate over valid indexes and plot</span></span>
-<span id="cb8-90"><a href="#cb8-90" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i, index <span class="kw">in</span> <span class="bu">enumerate</span>(valid_indexes):</span>
-<span id="cb8-91"><a href="#cb8-91" aria-hidden="true" tabindex="-1"></a>        axes[i].imshow(pages[index <span class="op">-</span> <span class="dv">1</span>])  <span class="co"># Render the page in color</span></span>
-<span id="cb8-92"><a href="#cb8-92" aria-hidden="true" tabindex="-1"></a>        axes[i].axis(<span class="st">"off"</span>)  <span class="co"># Remove axes for cleaner display</span></span>
-<span id="cb8-93"><a href="#cb8-93" aria-hidden="true" tabindex="-1"></a>        axes[i].set_title(<span class="ss">f"Page Number: </span><span class="sc">{</span>index<span class="sc">}</span><span class="ss">"</span>)  <span class="co"># Set title as page index</span></span>
-<span id="cb8-94"><a href="#cb8-94" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-95"><a href="#cb8-95" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hide unused subplots</span></span>
-<span id="cb8-96"><a href="#cb8-96" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> j <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(valid_indexes), <span class="bu">len</span>(axes)):</span>
-<span id="cb8-97"><a href="#cb8-97" aria-hidden="true" tabindex="-1"></a>        axes[j].axis(<span class="st">"off"</span>)</span>
-<span id="cb8-98"><a href="#cb8-98" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-99"><a href="#cb8-99" aria-hidden="true" tabindex="-1"></a>    plt.tight_layout()</span>
-<span id="cb8-100"><a href="#cb8-100" aria-hidden="true" tabindex="-1"></a>    plt.show()</span>
-<span id="cb8-101"><a href="#cb8-101" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-102"><a href="#cb8-102" aria-hidden="true" tabindex="-1"></a>indexes_to_display <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="st">"A"</span>, <span class="op">-</span><span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">8</span>]  <span class="co"># Example with some invalid indices</span></span>
-<span id="cb8-103"><a href="#cb8-103" aria-hidden="true" tabindex="-1"></a>display_selected_pages(pages, indexes_to_display, columns<span class="op">=</span><span class="dv">3</span>)</span>
-<span id="cb8-104"><a href="#cb8-104" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-105"><a href="#cb8-105" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_answer_from_manual(query, model<span class="op">=</span>model, pages<span class="op">=</span>pages):</span>
-<span id="cb8-106"><a href="#cb8-106" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb8-107"><a href="#cb8-107" aria-hidden="true" tabindex="-1"></a><span class="co">    Query the model about the manual and return the answer with relevant pages.</span></span>
-<span id="cb8-108"><a href="#cb8-108" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-109"><a href="#cb8-109" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
-<span id="cb8-110"><a href="#cb8-110" aria-hidden="true" tabindex="-1"></a><span class="co">        model: The generative AI model instance</span></span>
-<span id="cb8-111"><a href="#cb8-111" aria-hidden="true" tabindex="-1"></a><span class="co">        pages: List of PDF pages</span></span>
-<span id="cb8-112"><a href="#cb8-112" aria-hidden="true" tabindex="-1"></a><span class="co">        query (str): The question to ask about the manual</span></span>
-<span id="cb8-113"><a href="#cb8-113" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-114"><a href="#cb8-114" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
-<span id="cb8-115"><a href="#cb8-115" aria-hidden="true" tabindex="-1"></a><span class="co">        tuple: (answer, page_numbers, raw_response)</span></span>
-<span id="cb8-116"><a href="#cb8-116" aria-hidden="true" tabindex="-1"></a><span class="co">            - answer (str): The extracted final answer</span></span>
-<span id="cb8-117"><a href="#cb8-117" aria-hidden="true" tabindex="-1"></a><span class="co">            - page_numbers (list): List of relevant page numbers</span></span>
-<span id="cb8-118"><a href="#cb8-118" aria-hidden="true" tabindex="-1"></a><span class="co">            - raw_response (str): The complete raw response from the model</span></span>
-<span id="cb8-119"><a href="#cb8-119" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-120"><a href="#cb8-120" aria-hidden="true" tabindex="-1"></a><span class="co">    Raises:</span></span>
-<span id="cb8-121"><a href="#cb8-121" aria-hidden="true" tabindex="-1"></a><span class="co">        ValueError: If no final answer is found in the response</span></span>
-<span id="cb8-122"><a href="#cb8-122" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb8-123"><a href="#cb8-123" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Format and send the prompt</span></span>
-<span id="cb8-124"><a href="#cb8-124" aria-hidden="true" tabindex="-1"></a>    prompt <span class="op">=</span> get_prompt(query<span class="op">=</span>query)</span>
-<span id="cb8-125"><a href="#cb8-125" aria-hidden="true" tabindex="-1"></a>    response <span class="op">=</span> model.generate_content(contents<span class="op">=</span>[prompt])</span>
-<span id="cb8-126"><a href="#cb8-126" aria-hidden="true" tabindex="-1"></a>    response_text <span class="op">=</span> response.candidates[<span class="dv">0</span>].content.parts[<span class="dv">0</span>].text</span>
-<span id="cb8-127"><a href="#cb8-127" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-128"><a href="#cb8-128" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract answer and page numbers</span></span>
-<span id="cb8-129"><a href="#cb8-129" aria-hidden="true" tabindex="-1"></a>    answer, page_nums <span class="op">=</span> extract_answer_and_references(response_text)</span>
-<span id="cb8-130"><a href="#cb8-130" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-131"><a href="#cb8-131" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(answer)</span>
-<span id="cb8-132"><a href="#cb8-132" aria-hidden="true" tabindex="-1"></a>    display_selected_pages(pages, page_nums)</span>
-<span id="cb8-133"><a href="#cb8-133" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-134"><a href="#cb8-134" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> answer, page_nums, response_text</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<h2 class="anchored" data-anchor-id="adding-utility-functions">Adding Utility Functions</h2>
+<p>Next we wrote 3 utility functions. A <em>utility function</em> is code that supports the main function, similar to how utilities like electricity support the main function of a coffee shop. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the other 2 utility functions to answer the user’s question.</p>
+<p>Utility Function #1</p>
+<div id="b0363e32" class="cell" data-execution_count="10">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_answer_and_references(text):</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Extract the final answer and page references from the formatted text.</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co">        text (str): Input text containing final answer and page references in XML-like format</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co">        tuple: (final_answer, page_references)</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co">            - final_answer (str): The extracted answer text</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co">            - page_references (list): List of page numbers as integers</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="co">    Example:</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="co">        &gt;&gt;&gt; text = '''&lt;final-answer&gt;The idle CO content is 0.7 ± 0.4 Vol. %.&lt;/final-answer&gt;</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="co">        ... &lt;page-references&gt;44, 53&lt;/page-references&gt;'''</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="co">        &gt;&gt;&gt; extract_answer_and_references(text)</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="co">        ('The idle CO content is 0.7 ± 0.4 Vol. %.', [44, 53])</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract final answer</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    answer_match <span class="op">=</span> re.search(<span class="vs">r"&lt;final-answer&gt;(.*?)&lt;/final-answer&gt;"</span>, text, re.DOTALL)</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>    final_answer <span class="op">=</span> answer_match.group(<span class="dv">1</span>).strip() <span class="cf">if</span> answer_match <span class="cf">else</span> <span class="va">None</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract page references</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>    ref_match <span class="op">=</span> re.search(<span class="vs">r"&lt;page-references&gt;(.*?)&lt;/page-references&gt;"</span>, text, re.DOTALL)</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    page_references <span class="op">=</span> []</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ref_match:</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Split by comma and convert to integers, handling whitespace</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>        refs <span class="op">=</span> ref_match.group(<span class="dv">1</span>).strip()</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>        page_references <span class="op">=</span> [</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>            <span class="bu">int</span>(page.strip()) <span class="cf">for</span> page <span class="kw">in</span> refs.split(<span class="st">","</span>) <span class="cf">if</span> page.strip().isdigit()</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>        ]</span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> final_answer <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"No final answer found in the input text"</span>)</span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> final_answer, page_references</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p>Utility Function #2</p>
+<div id="b9806a9d" class="cell" data-execution_count="11">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> display_selected_pages(pages, indexes, columns<span class="op">=</span><span class="dv">2</span>):</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Displays specific pages based on their indexes, arranged in a grid with a configurable number of columns.</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co">    Safely handles invalid indices by skipping them.</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co">        pages (list): List of PIL.Image objects representing the pages of a PDF.</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co">        indexes (list): List of indices (can be any type) representing the pages to display.</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="co">        columns (int): Number of columns per row (default is 2).</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Validate columns</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> columns <span class="op">&lt;</span> <span class="dv">1</span>:</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">"The number of columns must be at least 1."</span>)</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Convert and filter valid indexes</span></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    valid_indexes <span class="op">=</span> []</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    skipped_indexes <span class="op">=</span> []</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> idx <span class="kw">in</span> indexes:</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Try to convert to integer</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>            int_idx <span class="op">=</span> <span class="bu">int</span>(idx)</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Check if index is in valid range</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">0</span> <span class="op">&lt;=</span> int_idx <span class="op">&lt;</span> <span class="bu">len</span>(pages):</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>                valid_indexes.append(int_idx)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>            <span class="cf">else</span>:</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>                skipped_indexes.append(idx)</span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> (<span class="pp">ValueError</span>, <span class="pp">TypeError</span>):</span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>            <span class="co"># If conversion fails, add to skipped list</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>            skipped_indexes.append(idx)</span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> skipped_indexes:</span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Skipped invalid indexes: </span><span class="sc">{</span>skipped_indexes<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> valid_indexes:</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="st">"No valid indexes provided. Nothing to display."</span>)</span>
+<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calculate rows needed</span></span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> math.ceil(<span class="bu">len</span>(valid_indexes) <span class="op">/</span> columns)</span>
+<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a grid to display pages</span></span>
+<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>    fig, axes <span class="op">=</span> plt.subplots(rows, columns, figsize<span class="op">=</span>(columns <span class="op">*</span> <span class="dv">5</span>, rows <span class="op">*</span> <span class="dv">7</span>))</span>
+<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Convert axes to 2D array if it's 1D or a single axis</span></span>
+<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> rows <span class="op">==</span> <span class="dv">1</span> <span class="kw">and</span> columns <span class="op">==</span> <span class="dv">1</span>:</span>
+<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>        axes <span class="op">=</span> np.array([[axes]])</span>
+<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>    <span class="cf">elif</span> rows <span class="op">==</span> <span class="dv">1</span> <span class="kw">or</span> columns <span class="op">==</span> <span class="dv">1</span>:</span>
+<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a>        axes <span class="op">=</span> axes.reshape(<span class="op">-</span><span class="dv">1</span>, columns)</span>
+<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>    axes <span class="op">=</span> axes.flatten()  <span class="co"># Flatten for easier indexing</span></span>
+<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Iterate over valid indexes and plot</span></span>
+<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i, index <span class="kw">in</span> <span class="bu">enumerate</span>(valid_indexes):</span>
+<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>        axes[i].imshow(pages[index <span class="op">-</span> <span class="dv">1</span>])  <span class="co"># Render the page in color</span></span>
+<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>        axes[i].axis(<span class="st">"off"</span>)  <span class="co"># Remove axes for cleaner display</span></span>
+<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>        axes[i].set_title(<span class="ss">f"Page Number: </span><span class="sc">{</span>index<span class="sc">}</span><span class="ss">"</span>)  <span class="co"># Set title as page index</span></span>
+<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Hide unused subplots</span></span>
+<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> j <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(valid_indexes), <span class="bu">len</span>(axes)):</span>
+<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a>        axes[j].axis(<span class="st">"off"</span>)</span>
+<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a>    plt.tight_layout()</span>
+<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>    plt.show()</span>
+<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>indexes_to_display <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">2</span>, <span class="st">"A"</span>, <span class="op">-</span><span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">8</span>]  <span class="co"># Example with some invalid indices</span></span>
+<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>display_selected_pages(pages, indexes_to_display, columns<span class="op">=</span><span class="dv">3</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Utility Function #3</p>
+<div id="54c40e8b" class="cell" data-execution_count="12">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_answer_from_manual(query, model<span class="op">=</span>model, pages<span class="op">=</span>pages):</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Query the model about the manual and return the answer with relevant pages.</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Args:</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co">        model: The generative AI model instance</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co">        pages: List of PDF pages</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="co">        query (str): The question to ask about the manual</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns:</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co">        tuple: (answer, page_numbers, raw_response)</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co">            - answer (str): The extracted final answer</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co">            - page_numbers (list): List of relevant page numbers</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="co">            - raw_response (str): The complete raw response from the model</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="co">    Raises:</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="co">        ValueError: If no final answer is found in the response</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Format and send the prompt</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    prompt <span class="op">=</span> get_prompt(query<span class="op">=</span>query)</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    response <span class="op">=</span> model.generate_content(contents<span class="op">=</span>[prompt])</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>    response_text <span class="op">=</span> response.candidates[<span class="dv">0</span>].content.parts[<span class="dv">0</span>].text</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract answer and page numbers</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    answer, page_nums <span class="op">=</span> extract_answer_and_references(response_text)</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(answer)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>    display_selected_pages(pages, page_nums)</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> answer, page_nums, response_text</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>That is how we worked with Google’s APIs to build the tool. Next I’ll show how it performs on a few queries.</p>
 </section>
-<section id="using-the-tool" class="level2 page-columns page-full">
+<section id="using-the-tool" class="level2">
 <h2 class="anchored" data-anchor-id="using-the-tool">Using the Tool</h2>
-<p>Below are examples of the tool in use.</p>
-<p>What I did here is important, you actually decide what queries you want it to handle then use that to assess how well it works. Anything a technician wants to know has a location and a format. Information in the manual has a location and a format. Sometimes a technician just wants the location, or just the information, or a specific format. So we made the tool to be able to handle these types of queries. Because the manual we were working off of had a lot of information in textual procedurals, and diagrams of exploded schematics, we</p>
-<p>Query 1: Looking for location In the example below,</p>
-<p>We thought through what kinds of queries a technician would have and tested the 4 most frequent query types:</p>
-<p>The technician wants to know where information is in the manual The technician is looking for a procedure The technician is looking for a diagram The technician is looking for a detail Information in machine manuals is often multimodal, containing text and images. In some cases a technician doesn’t care what mode the information comes in (query types 1 and 4), in others they are looking for a specific mode (query types 2 and 3).</p>
-<p>In this demonstration’s manual, the modes are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual’s content is procedures and exploded schematics, we focused on those examples</p>
-<div class="column-page">
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&amp;kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<p>We thought through what kinds of queries a technician would ask and tested the 4 most frequent query types:</p>
+<ol type="1">
+<li><p>The technician wants to know where information is in the manual</p></li>
+<li><p>The technician is looking for a procedure</p></li>
+<li><p>The technician is looking for a diagram</p></li>
+<li><p>The technician is looking for a detail</p></li>
+</ol>
+<p>Information in machine manuals is often multimodal, e.g.&nbsp;containing text and images. In some cases a technician doesn’t care what format the information comes in (query types 1 and 4), in others they are looking for a specific format (query types 2 and 3).</p>
+<p>In our example manual, the formats are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual’s content is procedures and exploded schematics, we focused on those examples.</p>
+<p>Example #1</p>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&amp;kernelSessionId=210373422" height="800" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<p>Example #2</p>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=32&amp;kernelSessionId=210373422" height="800" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<p>Example #3</p>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=33&amp;kernelSessionId=210373422" height="700" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<p>Example #4</p>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=34&amp;kernelSessionId=210373422" height="700" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+</section>
 <section id="performance-and-limitations" class="level2">
 <h2 class="anchored" data-anchor-id="performance-and-limitations">Performance and Limitations</h2>
-<p>The point of the tool is find information for technicians faster. The QA tool does well on finding the right information. The technicians I talked to say that they either have a physical manul, or use ctrl+F in a PDF to search for keywords. This tool works better than keyword search because it also lets technicians search by images or diagrams that have no associated text, that could not have been found with the normal method. On the other side, the tool takes about 1 minute to generate a response so it fails to find the information for technicians faster. One solution I am working on is RAG since there would be less information for the model to process in generating an answer, so response time should be faster. The second limitation is reliability. We have examples, but don’t know how often it is right or wrong. To address this we’ll make a bunch of example queries and correct responses in the different query types, then run the tests multiple times to score the precision and recall of the model. This will let us talk about how good the tool isand when we make changes, to what extent is has improved.</p>
+<p>The point of the tool was find the right information for technicians, and find it faster. The technician’s default solution is either to go through a physical manual, or use CTRL+F to do keyword search on a PDF. This tool does better than keyword search for finding information because it also lets technicians search by describing images or diagrams that have no associated text. This kind of content just can’t be found with CTRL+F. In terms of speed, the tool takes about 1 minute to generate a response. That is too slow. One solution to this limitation would be to use RAG - there would be fewer pages from the manual given to the model, so response time should be faster.</p>
+<p>Separate from accuracy and speed, this tool lacks metrics. Case in point, we used a handful of example queries and manually reviewed the output to judge whether the answers were correct. So one of the next steps in developing this tool is to generate a large number of example queries and correct responses, then run those queries several times to compare the model responses to the correct responses. From this we could calculate metrics like precision and recall, then use those as benchmarks to evaluate whether changes in prompts or models improve the tool and by how much.</p>
 </section>
 <section id="conclusion" class="level2">
 <h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
-<p>May need to write</p>
+<p>Using the long context window of Google’s Gemini Pro 1.5, we were able to build a tool to answer technicians’ questions from information in a machine manual. The tool could produce accurate answers and find information that technicians’ current solutions can’t, but it’s not fast enough to be useful (yet).</p>
+<p>The key stages of developing with Google’s latest AI model were getting API keys, uploading the context using the Files API, caching the context, initializing the model, and then calling it. The key method we used to improve model accuracy was prompt engineering, and the key method we used to improve model speed was context caching. Our solution also used code that converted the context into the right input format, and defined functions to process the model’s output before displaying it to the user.</p>
+<p>Future iterations of the project will experiment with RAG to improve speed, and robust testing to assess accuracy.</p>
 
 
-</section>
-</div>
 </section>
 
 </main> <!-- /main -->

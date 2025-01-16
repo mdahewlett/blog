@@ -9,12 +9,12 @@ execute:
 ---
 
 ## Introduction
-When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are thousands of pages long! To help them find the right information faster, my friend and I built a QA (question-answer) tool that uses LLMs. 
+When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are <u>thousands</u> of pages long! To help them find the right information faster, my friend and I built a QA (question-answer) tool that uses LLMs. 
 
-But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their context window. Being thousands of pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question, but in November 2024 Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So my friend and I built the tool using that model. In the rest of this post I’ll walk through how we worked with Google's APIs to build the tool, show how it performs on a few queries, and end with limitations and next steps for the project.
+But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their *context window*. Being many, many pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question (this is called *retrieval augment generation* or *RAG*), but in October 2024, Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So my friend and I built the tool using that model. In the rest of this post I’ll walk through how we worked with Google's APIs to build the tool, show how it performs on a few queries, and end with limitations and next steps for the project.
 
 ## Installations
-First we installed the necessary packages. The google-generativeai library allows us to interact with Google's Generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The other imports are for utility functions later on.
+First we installed the necessary packages. The google-generativeai library allows us to interact with Google's generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The other imports are for utility functions later on.
 
 ```{python}
 # Installations
@@ -39,7 +39,7 @@ import re
 
 
 ## API Keys
-Next we got API keys from Google and set them up. To get a Gemini API key, check out the documentation here: https://ai.google.dev/gemini-api/docs.
+Next we got API keys from Google and set them up. To get a Gemini API key, check out the documentation here: <https://ai.google.dev/gemini-api/docs>.
 
 ```{python}
 # Configure API keys
@@ -58,7 +58,7 @@ pages = convert_from_path(pdf_path)
 ```
 
 ## Uploading Images
-We uploaded those images to Google's AI Platform using the Files API. Uploading is a necessary step for caching, which I'll cover in a sec.
+We uploaded those images to Google's AI platform using the Files API. Uploading is a necessary step for caching, which I'll cover in a sec.
 
 ```{python}
 # Upload pages, save file names
@@ -75,7 +75,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
 ```
 
 ## Adding Page Numbers
-Our manual did not have clear page numbers so we used a hack that tell the model what page numbers to associate with what pages.
+Our manual did not have clear page numbers so we used a hack that tells the model what page numbers to associate with what pages.
 
 ```{python}
 # Add context to pages
@@ -93,9 +93,13 @@ for i, filename in enumerate(uploaded_file_names):
 ```
 
 ## Caching
-Next we cached the manual and invoked the model. Caching makes a copy of the uploaded images more readily available to the model so that answers are generated faster.
+Next we cached the manual and initialized the model. Caching makes a copy of the uploaded images more readily available to the model so that answers are generated faster.
 
-Caching also brings down the cost. Generally with API calls to LLMs, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if a big part of the information you are regularly giving the model is the same, it can be cheaper to cache this. In our case, each time a user asks a question, we're giving the model that question AND the pages of the manual. Since the user's question changes every time, we can't cache it, but the manual pages don't change, so caching makes sense there. For more on context caching, checkout the documentation here: https://ai.google.dev/gemini-api/docs/caching?hl=en&lang=python
+Caching also brings down the cost. Generally with API calls to LLMs, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if a big part of the information you are regularly giving the model is the same, it can be cheaper to cache this. 
+
+In our case, each time a user asks a question, we're giving the model that question AND the pages of the manual. Since the user's question changes every time, we can't cache it, but the manual pages don't change, so caching makes sense there. 
+
+For more on context caching, checkout the documentation here: <https://ai.google.dev/gemini-api/docs/caching?hl=en&lang=python>
 
 ```{python}
 # Cache context, add system prompt
@@ -116,18 +120,23 @@ model = genai.GenerativeModel.from_cached_content(cached_content=cache)
 ```
 
 ## Prompting
-Then we wrote a prompt that would pass the user's question to the model, along with instructions on other information the model would get and what output we would want it to generate. We built this prompt by first asking the model example questions, then used those moments when then model response was incorrect to modify the instructions in our prompt. We found 5 problems and used 5 common prompting techniques to address those.
+Then we wrote a prompt that would pass the user's question to the model, along with instructions on how to process all the input and what output we would want the model to generate. 
 
-First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through the whole document in 10 page sections, then decide what pages were relevant. This is called full document chain-of-thought. 
+We built this prompt by first asking the model example questions (e.g. "Where can I find information on rear brake lights?"), then used those moments when then model's response was incorrect to modify the instructions in our prompt in order to get closer to the desired output. This process is called *prompt engineering*.
 
-Second we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to first extract all the information from page into its own format, then use it's copy of the information to answer the question. 
+In this process we found 5 problems and used 5 common prompting techniques to address those.
+
+First we found that the model would stop looking through the manual once it found an answer, but we wanted to make sure it found all relevant pages, so we told it to scan through the whole document in 10 page sections, then decide what pages were relevant. This is called *full document chain-of-thought*. 
+
+Second we found that when the needed information was in a table, the model would find the right table but pull information from the wrong cell, so we told it to first extract all the information from page into its own format, then use its copy of the information to answer the question. 
 
 Third, these models are stochastic and can make mistakes, so we asked it to check its work. 
 
 Fourth, since the model output would include its full document chain of thought and other irrelevant information, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer. 
 
-Firth, we gave the model a few examples of the output we wanted. This technique is called few-shot prompting. The code below starts with those examples because they are then read into the main prompt.
+Fifth, we gave the model a few examples of the output we wanted. This technique is called *few-shot prompting*. The code below starts with those examples because they are then read into the main prompt. You can see from the length of the example outputs why we would want to just extract the key information for the user.
 
+Example Output for Few Shot Prompting #1
 ```{python}
 example_1 = """
 <example-1>
@@ -200,7 +209,10 @@ The idle CO content is 0.7 ± 0.4 Vol. %.
 </page-references>
 </example-1>
 """
+```
 
+Example Output for Few Shot Prompting #2
+```{python}
 example_2 = """
 <example-2>
 Query: Where can I find information on the Sunroof?
@@ -265,7 +277,10 @@ Information on the sunroof can be found on pages 58 and 59 of the manual.
 58, 59
 </page-references>
 """
+```
 
+Main Prompt
+```{python}
 def get_prompt(query):
     return f"""Based on the manual pages provided, answer the following question: {query}
 
@@ -302,8 +317,9 @@ Here are two example outputs for your reference, please format your response acc
 ```
 
 ## Adding Utility Functions
-Next we wrote 3 utility functions. A utility function is code that supports the main function, like how utilities like electricity support the main function of a coffee shop. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the other 2 utility functions to answer the user's question.
+Next we wrote 3 utility functions. A *utility function* is code that supports the main function, similar to how utilities like electricity support the main function of a coffee shop. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the other 2 utility functions to answer the user's question.
 
+Utility Function #1
 ```{python}
 def extract_answer_and_references(text):
     """
@@ -342,7 +358,10 @@ def extract_answer_and_references(text):
         raise ValueError("No final answer found in the input text")
 
     return final_answer, page_references
+```
 
+Utility Function #2
+```{python}
 def display_selected_pages(pages, indexes, columns=2):
     """
     Displays specific pages based on their indexes, arranged in a grid with a configurable number of columns.
@@ -408,6 +427,11 @@ def display_selected_pages(pages, indexes, columns=2):
 
 indexes_to_display = [1, 2, "A", -1, 5, 8]  # Example with some invalid indices
 display_selected_pages(pages, indexes_to_display, columns=3)
+```
+
+Utility Function #3
+```{python}
+
 
 def get_answer_from_manual(query, model=model, pages=pages):
     """
@@ -444,39 +468,49 @@ def get_answer_from_manual(query, model=model, pages=pages):
 That is how we worked with Google's APIs to build the tool. Next I'll show how it performs on a few queries.
 
 ## Using the Tool
-We thought through what kinds of queries a technician would have and tested the 4 most frequent query types:
+We thought through what kinds of queries a technician would ask and tested the 4 most frequent query types:
+
 1. The technician wants to know where information is in the manual
+
 2. The technician is looking for a procedure
+
 3. The technician is looking for a diagram
+
 4. The technician is looking for a detail
 
-Information in machine manuals is often multimodal, containing text and images. In some cases a technician doesn't care what format the information comes in (query types 1 and 4), in others they are looking for a specific format (query types 2 and 3).
+Information in machine manuals is often multimodal, e.g. containing text and images. In some cases a technician doesn't care what format the information comes in (query types 1 and 4), in others they are looking for a specific format (query types 2 and 3).
 
 In our example manual, the formats are procedures, data tables, and a host of visuals like exploded schematics, circuit diagrams, and troubleshooting flow charts. Since the majority of the manual's content is procedures and exploded schematics, we focused on those examples.
 
-Example 1
+Example #1
 ```{=html}
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=31&kernelSessionId=210373422" height="800" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
 ```
 
-Example 2
+Example #2
 ```{=html}
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=32&kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=32&kernelSessionId=210373422" height="800" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
 ```
 
-Example 3
+Example #3
 ```{=html}
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=33&kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=33&kernelSessionId=210373422" height="700" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
 ```
 
-Example 4
+Example #4
 ```{=html}
-<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=34&kernelSessionId=210373422" height="300" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
+<iframe src="https://www.kaggle.com/embed/mhewlett/google-gemini-long-context?cellIds=34&kernelSessionId=210373422" height="700" style="margin: 0 auto; width: 100%; max-width: 950px;" frameborder="0" scrolling="auto" title="Google - Gemini Long Context"></iframe>
 ```
 
 ## Performance and Limitations
 
-The point of the tool is find information for technicians faster. The QA tool does well on finding the right information. The technicians I talked to say that they either have a physical manul, or use ctrl+F in a PDF to search for keywords. This tool works better than keyword search because it also lets technicians search by images or diagrams that have no associated text, that could not have been found with the normal method. On the other side, the tool takes about 1 minute to generate a response so it fails to find the information for technicians faster. One solution I am working on is RAG since there would be less information for the model to process in generating an answer, so response time should be faster. The second limitation is reliability. We have examples, but don’t know how often it is right or wrong. To address this we’ll make a bunch of example queries and correct responses in the different query types, then run the tests multiple times to score the precision and recall of the model. This will let us talk about how good the tool isand when we make changes, to what extent is has improved.
+The point of the tool was find the right information for technicians, and find it faster. The technician's default solution is either to go through a physical manual, or use CTRL+F to do keyword search on a PDF. This tool does better than keyword search for finding information because it also lets technicians search by describing images or diagrams that have no associated text. This kind of content just can't be found with CTRL+F. In terms of speed, the tool takes about 1 minute to generate a response. That is too slow. One solution to this limitation would be to use RAG - there would be fewer pages from the manual given to the model, so response time should be faster. 
+
+Separate from accuracy and speed, this tool lacks metrics. Case in point, we used a handful of example queries and manually reviewed the output to judge whether the answers were correct. So one of the next steps in developing this tool is to generate a large number of example queries and correct responses, then run those queries several times to compare the model responses to the correct responses. From this we could calculate metrics like precision and recall, then use those as benchmarks to evaluate whether changes in prompts or models improve the tool and by how much.
 
 ## Conclusion
-May need to write
+Using the long context window of Google's Gemini Pro 1.5, we were able to build a tool to answer technicians' questions from information in a machine manual. The tool could produce accurate answers and find information that technicians' current solutions can't, but it's not fast enough to be useful (yet). 
+
+The key stages of developing with Google's latest AI model were getting API keys, uploading the context using the Files API, caching the context, initializing the model, and then calling it. The key method we used to improve model accuracy was prompt engineering, and the key method we used to improve model speed was context caching. Our solution also used code that converted the context into the right input format, and defined functions to process the model's output before displaying it to the user. 
+
+Future iterations of the project will experiment with RAG to improve speed, and robust testing to assess accuracy.
