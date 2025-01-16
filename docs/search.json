@@ -49,11 +49,11 @@
     "text": "Converting PDFs to Images\nThen we converted the PDF of the manual into individual images since the model cannot take PDFs as input.\n\n# Convert PDF to images\npdf_path = '/kaggle/input/manuals/manual_130.pdf'\npages = convert_from_path(pdf_path)"
   },
   {
-    "objectID": "posts/post-with-code/index.html#uploading-images-to-googles-ai-platform",
-    "href": "posts/post-with-code/index.html#uploading-images-to-googles-ai-platform",
+    "objectID": "posts/post-with-code/index.html#uploading-images",
+    "href": "posts/post-with-code/index.html#uploading-images",
     "title": "Fixing factory machines faster with LLMs",
-    "section": "Uploading Images to Google’s AI Platform",
-    "text": "Uploading Images to Google’s AI Platform\nWe uploaded those images using the Files API. This lets the manual to be used across different queries. It speeds things up since the files don’t need to be uploaded each time a user asks a question.\n\n# Upload pages, save file names\nuploaded_file_names = []\n\nwith tempfile.TemporaryDirectory() as temp_dir:\n    for i, page in enumerate(pages):\n        image_path = f'{temp_dir}/page_{i + 1}.jpg'\n        page.save(image_path, 'JPEG')\n\n        uploaded_file = genai.upload_file(image_path)\n        # print(f\"Uploaded file: {uploaded_file}\") # for debugging\n        uploaded_file_names.append(uploaded_file.name)"
+    "section": "Uploading Images",
+    "text": "Uploading Images\nWe uploaded those images to Google’s AI platform using the Files API. Uploading is a necessary step for caching, which I’ll cover in a sec.\n\n# Upload pages, save file names\nuploaded_file_names = []\n\nwith tempfile.TemporaryDirectory() as temp_dir:\n    for i, page in enumerate(pages):\n        image_path = f'{temp_dir}/page_{i + 1}.jpg'\n        page.save(image_path, 'JPEG')\n\n        uploaded_file = genai.upload_file(image_path)\n        # print(f\"Uploaded file: {uploaded_file}\") # for debugging\n        uploaded_file_names.append(uploaded_file.name)"
   },
   {
     "objectID": "posts/post-with-code/index.html#adding-page-numbers",
@@ -110,12 +110,5 @@
     "title": "blog",
     "section": "",
     "text": "Fixing factory machines faster with LLMs\n\n\n\n\n\n\ncode\n\n\nanalysis\n\n\n\n\n\n\n\n\n\nJan 15, 2025\n\n\nMichael Hewlett\n\n\n\n\n\n\n\n\n\n\n\n\nWelcome To My Blog\n\n\n\n\n\n\nnews\n\n\n\n\n\n\n\n\n\nJan 12, 2025\n\n\nTristan O’Malley\n\n\n\n\n\n\nNo matching items"
-  },
-  {
-    "objectID": "posts/post-with-code/index.html#uploading-images",
-    "href": "posts/post-with-code/index.html#uploading-images",
-    "title": "Fixing factory machines faster with LLMs",
-    "section": "Uploading Images",
-    "text": "Uploading Images\nWe uploaded those images to Google’s AI platform using the Files API. Uploading is a necessary step for caching, which I’ll cover in a sec.\n\n# Upload pages, save file names\nuploaded_file_names = []\n\nwith tempfile.TemporaryDirectory() as temp_dir:\n    for i, page in enumerate(pages):\n        image_path = f'{temp_dir}/page_{i + 1}.jpg'\n        page.save(image_path, 'JPEG')\n\n        uploaded_file = genai.upload_file(image_path)\n        # print(f\"Uploaded file: {uploaded_file}\") # for debugging\n        uploaded_file_names.append(uploaded_file.name)"
   }
 ]
