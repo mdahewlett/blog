@@ -1,5 +1,5 @@
 ---
-title: "Michael Hewlett's Blog"
+title: "Index"
 listing:
   contents: posts
   sort: "date desc"
