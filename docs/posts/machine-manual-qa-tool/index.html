@@ -187,12 +187,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
 <p>When a machine breaks down in a factory, a technician comes to fix it. The faster they fix it, the sooner the factory is making products. But the machine manuals that technicians need to use to fix the machines are <u>thousands</u> of pages long! To help them find the right information faster, my friend and I built a QA (question-answer) tool that uses LLMs.</p>
-<p>But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their <em>context window</em>. Being many, many pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question (this is called <em>retrieval augment generation</em> or <em>RAG</em>), but in October 2024, Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So my friend and I built the tool using that model. In the rest of this post I’ll walk through how we worked with Google’s APIs to build the tool, show how it performs on a few queries, and end with limitations and next steps for the project.</p>
+<p>But LLMs have a limit to the amount of information they can consider when answering a user’s query - this is called their <em>context window</em>. Being many, many pages long, the manuals are too large for this context window. Normally AI engineers solve this by breaking the manual into pieces, finding the most relevant piece for the user’s question, then using it to answer the question (this is called <em>retrieval augment generation</em> or <em>RAG</em>), but in October 2024, Google released Gemini Pro 1.5 with a context window long enough to take in thousands of pages. So my friend and I built the tool using that model. In the rest of this post I’ll walk through how we worked with Google’s APIs to build the tool, show how it performs on a few queries, and end with limitations and next steps for the project. If you prefer videos, we cover the same content in this one: <a href="https://youtu.be/m8Gdi8UseM0" class="uri">https://youtu.be/m8Gdi8UseM0</a></p>
 </section>
 <section id="installations" class="level2">
 <h2 class="anchored" data-anchor-id="installations">Installations</h2>
 <p>First we installed the necessary packages. The google-generativeai library allows us to interact with Google’s generative AI models, and pdf2image along with poppler-utils converts PDF documents into images for processing. The other imports are for utility functions later on.</p>
-<div id="880ec092" class="cell" data-execution_count="1">
+<div id="0bea3bef" class="cell" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Installations</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>pip install <span class="op">-</span>q google<span class="op">-</span>generativeai</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">!</span>apt<span class="op">-</span>get install <span class="op">-</span>y poppler<span class="op">-</span>utils</span>
@@ -216,7 +216,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="api-keys" class="level2">
 <h2 class="anchored" data-anchor-id="api-keys">API Keys</h2>
 <p>Next we got API keys from Google and set them up. To get a Gemini API key, check out the documentation here: <a href="https://ai.google.dev/gemini-api/docs" class="uri">https://ai.google.dev/gemini-api/docs</a>.</p>
-<div id="3713ca7d" class="cell" data-execution_count="2">
+<div id="b9f4a069" class="cell" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure API keys</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>user_secrets <span class="op">=</span> UserSecretsClient()</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>api_key <span class="op">=</span> user_secrets.get_secret(<span class="st">"GOOGLE_API_KEY"</span>)</span>
@@ -226,7 +226,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="converting-pdfs-to-images" class="level2">
 <h2 class="anchored" data-anchor-id="converting-pdfs-to-images">Converting PDFs to Images</h2>
 <p>Then we converted the PDF of the manual into individual images since the model cannot take PDFs as input.</p>
-<div id="79c5f81f" class="cell" data-execution_count="3">
+<div id="bd227191" class="cell" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert PDF to images</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>pdf_path <span class="op">=</span> <span class="st">'/kaggle/input/manuals/manual_130.pdf'</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>pages <span class="op">=</span> convert_from_path(pdf_path)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -235,7 +235,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="uploading-images" class="level2">
 <h2 class="anchored" data-anchor-id="uploading-images">Uploading Images</h2>
 <p>We uploaded those images to Google’s AI platform using the Files API. Uploading is a necessary step for caching, which I’ll cover in a sec.</p>
-<div id="f49a95da" class="cell" data-execution_count="4">
+<div id="2d191852" class="cell" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Upload pages, save file names</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>uploaded_file_names <span class="op">=</span> []</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -252,7 +252,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="adding-page-numbers" class="level2">
 <h2 class="anchored" data-anchor-id="adding-page-numbers">Adding Page Numbers</h2>
 <p>Our manual did not have clear page numbers so we used a hack that tells the model what page numbers to associate with what pages.</p>
-<div id="c8f00b27" class="cell" data-execution_count="5">
+<div id="28317414" class="cell" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Add context to pages</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>context_preamble <span class="op">=</span> <span class="st">"""</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="st">Please answer questions with respect to the "ACTUAL_PAGE_NUMBER" indices, rather than the page numbers in the manual itself.</span></span>
@@ -273,7 +273,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Caching also brings down the cost. Generally with API calls to LLMs, you are charged by how much information you give the model, and how much text the model generates. Information that you give the model that is cached is charged at a lower rate, so if a big part of the information you are regularly giving the model is the same, it can be cheaper to cache this.</p>
 <p>In our case, each time a user asks a question, we’re giving the model that question AND the pages of the manual. Since the user’s question changes every time, we can’t cache it, but the manual pages don’t change, so caching makes sense there.</p>
 <p>For more on context caching, checkout the documentation here: <a href="https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python" class="uri">https://ai.google.dev/gemini-api/docs/caching?hl=en&amp;lang=python</a></p>
-<div id="63e73f81" class="cell" data-execution_count="6">
+<div id="4a518041" class="cell" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache context, add system prompt</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>cache <span class="op">=</span> caching.CachedContent.create(</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    model<span class="op">=</span><span class="st">'models/gemini-1.5-pro-002'</span>,</span>
@@ -302,7 +302,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Fourth, since the model output would include its full document chain of thought and other irrelevant information, we asked it to include the information that we wanted to show the user in XML tags so we could later use REGEX to easily extract the answer.</p>
 <p>Fifth, we gave the model a few examples of the output we wanted. This technique is called <em>few-shot prompting</em>. The code below starts with those examples because they are then read into the main prompt. You can see from the length of the example outputs why we would want to just extract the key information for the user.</p>
 <p>Example Output for Few Shot Prompting #1</p>
-<div id="41eeca38" class="cell" data-execution_count="7">
+<div id="bd38cc6d" class="cell" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>example_1 <span class="op">=</span> <span class="st">"""</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;example-1&gt;</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="st">Query: What is the CO content at idle?</span></span>
@@ -376,7 +376,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Example Output for Few Shot Prompting #2</p>
-<div id="926be5c9" class="cell" data-execution_count="8">
+<div id="3fa6862d" class="cell" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>example_2 <span class="op">=</span> <span class="st">"""</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="st">&lt;example-2&gt;</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="st">Query: Where can I find information on the Sunroof?</span></span>
@@ -443,7 +443,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Main Prompt</p>
-<div id="ff1165f7" class="cell" data-execution_count="9">
+<div id="3327b847" class="cell" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_prompt(query):</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"""Based on the manual pages provided, answer the following question: </span><span class="sc">{</span>query<span class="sc">}</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -483,7 +483,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="adding-utility-functions">Adding Utility Functions</h2>
 <p>Next we wrote 3 utility functions. A <em>utility function</em> is code that supports the main function, similar to how utilities like electricity support the main function of a coffee shop. The first function extract_answers_from_text() extracts the final answer and page references from the model response. The second function display_selected_pages() displays the relevant pages to the user. The third function get_answer_from_manual() calls the model, then uses the other 2 utility functions to answer the user’s question.</p>
 <p>Utility Function #1</p>
-<div id="feb63cbb" class="cell" data-execution_count="10">
+<div id="5626e4bd" class="cell" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_answer_and_references(text):</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Extract the final answer and page references from the formatted text.</span></span>
@@ -523,7 +523,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> final_answer, page_references</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Utility Function #2</p>
-<div id="3aa2eb35" class="cell" data-execution_count="11">
+<div id="d4ff834f" class="cell" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> display_selected_pages(pages, indexes, columns<span class="op">=</span><span class="dv">2</span>):</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Displays specific pages based on their indexes, arranged in a grid with a configurable number of columns.</span></span>
@@ -591,7 +591,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a>display_selected_pages(pages, indexes_to_display, columns<span class="op">=</span><span class="dv">3</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Utility Function #3</p>
-<div id="b5da4ae6" class="cell" data-execution_count="12">
+<div id="f70b9505" class="cell" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_answer_from_manual(query, model<span class="op">=</span>model, pages<span class="op">=</span>pages):</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co">    Query the model about the manual and return the answer with relevant pages.</span></span>
